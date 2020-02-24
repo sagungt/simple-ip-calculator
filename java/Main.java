@@ -1,24 +1,54 @@
+import java.util.Arrays;
 import java.util.Scanner;
 import java.util.StringTokenizer;
+
 import java.lang.Math;
 
 public class Main {
+    private static String subnetwork;
+
     public static void main(final String[] args) {
         final Scanner input = new Scanner(System.in);
-        String ip_input;
+        String ip_input, sub_confirmation;
         int[] ip_address;
         int prefix;
-        System.out.print("masukan ip address dengan prefix : ");
+
+        System.out.print("Input IP Address with prefix : ");
         ip_input = input.next();
+
         final StringTokenizer ip_delim = new StringTokenizer(ip_input, "/");
         ip_address = ipToArray(ip_delim.nextToken());
         prefix = Integer.parseInt(ip_delim.nextToken());
+
         printData(ip_address, prefix);
-        System.out.println(getPrefixFromHost(512));
-        System.out.println(getSubnetworkHost(24, 4));
-        System.out.println(getActiveOctet(24));
-        getSubnetwork(ip_address, prefix, 4);
+        System.out.print("Subnet network (y/n) ? ");
+        sub_confirmation = input.next();
+
+        while (!sub_confirmation.equalsIgnoreCase("y") && !sub_confirmation.equalsIgnoreCase("n")) {
+            System.err.print("Please choose y or n : ");
+            sub_confirmation = input.next();
+        }
+
+        if (sub_confirmation.equalsIgnoreCase("y")) {
+            System.out.print("Recommended Subnetwork : ");
+            System.out.println(Arrays.toString(getRecommendedSubnetwork(24)));
+            System.out.print("Number of subnetwork : ");
+            subnetwork = input.next();
+            getSubnetwork(ip_address, prefix, Integer.parseInt(subnetwork));
+        } else {
+            input.close();
+            return;
+        }
         input.close();
+    }
+
+    public static boolean checkSubnet(final int prefix, final int subnet) {
+        for (int x : getRecommendedSubnetwork(prefix)) {
+            if (x == subnet) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static int[] maskToArray(int prefix) {
@@ -167,15 +197,19 @@ public class Main {
     }
 
     public static void getSubnetwork(final int[] ip, final int prefix, final int subnetwork) {
-        final int[][] ip_networks = new int[subnetwork][4];
-        final int[][] mask_networks = new int[subnetwork][4];
-        final int[][] wildcard_networks = new int[subnetwork][4];
-        final int[][] broadcast_networks = new int[subnetwork][4];
-        final int[][] first_ip_networks = new int[subnetwork][4];
-        final int[][] last_ip_networks = new int[subnetwork][4];
-        final int host = (getAvailableHost(prefix) + 2) / subnetwork;
+        int buffer = 0 + subnetwork;
+        while (checkSubnet(24, buffer)) {
+            buffer++;
+        }
+        final int[][] ip_networks = new int[buffer][4];
+        final int[][] mask_networks = new int[buffer][4];
+        final int[][] wildcard_networks = new int[buffer][4];
+        final int[][] broadcast_networks = new int[buffer][4];
+        final int[][] first_ip_networks = new int[buffer][4];
+        final int[][] last_ip_networks = new int[buffer][4];
+        final int host = (getAvailableHost(prefix) + 2) / buffer;
         final int prefix_subnetwork = getPrefixFromHost(host);
-        for (int i = 0; i < subnetwork; i++) {
+        for (int i = 0; i < buffer; i++) {
             ip_networks[i] = getNetworkAddress(ip, prefix_subnetwork);
             mask_networks[i] = maskToArray(prefix_subnetwork);
             wildcard_networks[i] = getWildcard(prefix_subnetwork);
@@ -192,9 +226,13 @@ public class Main {
                         prefix_subnetwork);
             }
         }
-        for (int j = 0; j < subnetwork; j++) {
+        for (int j = 0; j < buffer; j++) {
             System.out.println("=================================================");
-            System.out.printf("Subnetwork ke %d\n", j + 1);
+            if (j < subnetwork) {
+                System.out.printf("Subnetwork - %d\n", j + 1);
+            } else {
+                System.out.printf("Residual Subnetwork\n");
+            }
             System.out.printf("Network Address\t\t: %d.%d.%d.%d\n", ip_networks[j][0], ip_networks[j][1],
                     ip_networks[j][2], ip_networks[j][3]);
             System.out.printf("Subnetmask \t\t: %d.%d.%d.%d\n", mask_networks[j][0], mask_networks[j][1],
@@ -203,13 +241,13 @@ public class Main {
                     first_ip_networks[j][2], first_ip_networks[j][3]);
             System.out.printf("%d.%d.%d.%d\n", last_ip_networks[j][0], last_ip_networks[j][1], last_ip_networks[j][2],
                     last_ip_networks[j][3]);
-            System.out.printf("Wildcardmask\t: %d.%d.%d.%d\n", wildcard_networks[j][0], wildcard_networks[j][1],
+            System.out.printf("Wildcardmask\t\t: %d.%d.%d.%d\n", wildcard_networks[j][0], wildcard_networks[j][1],
                     wildcard_networks[j][2], wildcard_networks[j][3]);
             System.out.printf("Broadcast Address\t: %d.%d.%d.%d\n", broadcast_networks[j][0], broadcast_networks[j][1],
                     broadcast_networks[j][2], broadcast_networks[j][3]);
-            System.out.printf("Available host\t\t: %d\n", ((getAvailableHost(prefix) + 2) / subnetwork) - 2);
-            System.out.println("=================================================");
+            System.out.printf("Available host\t\t: %d\n", ((getAvailableHost(prefix) + 2) / buffer) - 2);
         }
+        System.out.println("=================================================");
     }
 
     public static int[] getNextNetwork(int[] ip, final int prefix) {
@@ -242,5 +280,25 @@ public class Main {
     public static int getActiveOctet(final int prefix) {
         return (prefix >= 1 && prefix <= 8) ? 1
                 : ((prefix >= 8 && prefix <= 16) ? 2 : ((prefix >= 16 && prefix <= 24) ? 3 : 4));
+    }
+
+    public static int[] getRecommendedSubnetwork(final int prefix) {
+        final int host = (getAvailableHost(prefix) + 2) / 4;
+        int buffer = 0;
+        int i = 2;
+        while (true) {
+            buffer += 1;
+            if (Math.pow(2, i) == host) {
+                break;
+            }
+            i++;
+        }
+        i = 2;
+        final int[] recommend = new int[buffer];
+        for (int j = 0; j < buffer; j++) {
+            recommend[j] = (int) Math.pow(2, i);
+            i++;
+        }
+        return recommend;
     }
 }
